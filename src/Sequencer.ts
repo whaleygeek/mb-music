@@ -1,9 +1,31 @@
 // Sequencer.ts (c) 2017 David Whale
 
-//TODO I would like these to be an enumeration that is mapped to an internal frequency table
+//TODO: I would like these to be an enumeration that is mapped to an internal frequency table
 //it makes it easier to do key changes and octave shifts etc
+// we could have a single O0 frequency table and multiply it up, but that might be
+// inaccurate and need local octave tweaks.
+// alternatively we could have a high octave table and divide it down.
+// again, that might be inaccurate at some frequencies and require tweaks.
+// it's a pain, but it might be best to have all supported octaves in a single table
+// and index into it using octave/12, to get the best playback accuracy
+// note that this is more to do with synthesis and less to do with sequencing
+// so perhaps we need to abstract that into a dummy synthesiser for now and solve later?
 
-enum NoteName { //TODO add all sharps and flats here
+//TODO: I would like to separate this entirey from Music and just use a pitch generator directly
+//so that we could do our own synthesis later
+
+//TODO: I would like to add a better DSL to define all the variances on note play styles (string)
+//name it M3L (Micro:bit Music Markup Language)
+
+//TODO: The frequencies need to go into a 'tuning' table.
+//we might use different tunings, but the note names will be the same
+
+enum NoteName {
+    //TODO: add all sharps and flats here
+    //TODO: base notes as enumeration 0..11 (index into octave)
+    //then define alias names (like sharps and flats, double sharps etc)
+    //then define octave offsets on top of those as named notes
+    //It'll be a long list though. Hmm.
     C2 = 65,
     //% block=C#2
     CSharp2 = 69,
@@ -76,57 +98,106 @@ enum PlayStyle {
     Staccato = 3
 }
 //Tremolo? At same time as Slur/Slide
+//NOTE: Tremolo is a specific 'rate' of frequency modulation
+//it will require a much better synthesiser engine
+//which is a good reason to separate ourselves from the existing PXT Music module now
+//so we need a 'modulation wheel' and a 'pitch bend wheel' in the new synth module
 
 //% weight=100 color=#0000ff icon="*"
 namespace Sequencer {
-    let bpm = 137 //TODO make this dynamically changeable
-    let pitch_shift = 0 //TODO make this dynamcially changeable
+    // constants to allow different play styles to be customised
+    let stacatto_divisor = 2
+    let end_note_divisor = 10
+
+    let bpm = 137
+    let pitch_shift = 0
     let octave_shift = 0
-    let playing = 0 //TODO change to boolean
-    
-    export function fraction_to_ms(multiplier: number, divisor: number): number {
+    let current_frequency = 0
+
+
+    //adaptor to allow later separation from Music module
+    //this will become part of a new Synthesiser
+    function tone_for(frequency: number, duration: number) void {
+        //TODO: separate this from music and use native pitch generator directly
+        music.playTone(frequency, duration)
+    }
+
+    //adaptor to allow later separation from Music module
+    //this will become part of a new Synthesiser
+    function tone(frequency: number) void {
+        //TODO: separate this from music and use native pitch generator directly
+        music.ringTone(frequency)
+    }
+
+    //adaptor to allow later separation from Music module
+    //this will become part of a new Synthesiser
+    function stop() void {
+        //TODO: separate this from music and use native pitch generator directly
+        music.rest(0)
+    }
+
+    function fraction_to_ms(multiplier: number, divisor: number): number {
         // note this is sensitive to BPM changes, intentionally
         return ((60000 * 4 / bpm) * multiplier) / divisor
     }
 
-    //TODO: merge these two into a single play function with parameters
     /**
-     * Plays a note with a short delay after it
-     * @param frequency frequency of note to play, eg:music.Note.C
-     * @param multiplier multiplier for note fraction, eg:1 
-     * @param divisor divisor for note fraction, eg:4
+     * Changes the beats per minute value
+     * @param b the beats per minute to use, eg:120
      */
-    //% blockId=sequencer_play_note block="play %frequency|for %multiplier| / %divisor" blockGap=8
 
-    export function play_note(frequency: NoteName, multiplier: number, divisor: number): void {
-        let l = fraction_to_ms(multiplier, divisor)
-        let n1_4 = 60000/bpm
-        let d = n1_4 / 10
-        l -= d
-        if (playing == frequency) {
-            // continue slur
-            basic.pause(l)
-            music.rest(d)
-        } else {
-            playing = frequency
-            music.playTone(frequency, l)
-        }
-        playing = 0
-        music.rest(d)
+    //% blockId=sequencer_bpm block="set BPM %bpm" blockGap=8
+
+    export function set_bpm(b: number) void {
+        bpm = b
     }
+
+    //TODO: get_bpm (look at how to implement getters)
+    //TODO: change_bpm_by??
+
     /**
-     * Plays a note without a short delay after it
-     * @param frequency frequency of note to play, eg:music.Note.C
+     * Plays a note
+     * @param note the note to play, eg:NoteName.C1
      * @param multiplier multiplier for note fraction, eg:1 
      * @param divisor divisor for note fraction, eg:4
      */
-    //% blockId=sequencer_slur_note block="slur %frequency|for %multiplier|/ %divisor" blockGap=8
+    //% blockId=sequencer_play block="play %frequency|for %multiplier|/%divisor|using style %style" blockGap=8
 
-    export function slur_note(frequency: NoteName, multiplier: number, divisor: number): void {
+    export function play(note: NoteName, multiplier: number, divisor: number, style: PlayStyle): void {
+        // at the moment they are one and the same, but later they will be separated
+        frequency = note
         let l = fraction_to_ms(multiplier, divisor)
-        playing = frequency
-        music.ringTone(frequency)
-        basic.pause(l)
-        // leave note playing at end, for the slur
+        // *technically* a beat is not always a quarter note
+        // but uses MIDI convention that beats per min = 1/4 notes per min
+        let n1_4 = 60000/bpm
+        if (style == Normal) {
+            let d = n1_4 / end_note_divisor
+            l -= d
+            if (current_frequency == frequency) {
+                // continue slur
+                basic.pause(l)
+                // rest turns off tone generation
+                stop()
+                basic.pause(d)
+            } else {
+                current_frequency = frequency
+                tone_for(frequency, l)
+            }
+            current_frequency = 0
+            basic.pause(d)
+        } else if (style == Slur) {
+            current_frequency = frequency
+            tone(frequency)
+            basic.pause(l)
+            // leave note playing at end, for the slur
+        } else if (style == Slide) {
+            //TODO: frequency bend in l/n steps from old frequency to new frequency
+        } else if (style = Stacatto) {
+            //NOTE: we don't support a slur into a staccato note
+            d = l / staccato_divisor
+            l -= d
+            current_frequency = frequency
+            tone_for(frequency, l)
+        }
     }
 }
