@@ -200,7 +200,7 @@ namespace Sequencer {
      * @param multiplier the top part of the note length fraction eg:1
      * @param divisor the bottom part of the note length fraction eg:4
      */
-    //% blockId=sequencer_slide block="slide|%note|for %m/|%d" blockGap=8
+    //DISABLED % blockId=sequencer_slide block="slide|%note|for %m/|%d" blockGap=8
     export function slide(note: NoteName, multiplier: number, divisor: number): void {
         play_note(PlayStyle.Slide, note, multiplier, divisor)
     }
@@ -242,8 +242,11 @@ namespace Sequencer {
             basic.pause(l)
             // leave note playing at end, for the slur
         } else if (style == PlayStyle.Slide) {
-            //TODO: This is flawed at the moment
             //if previous note was a Normal, freq will always be 0 when we get here
+            //means you always need slur followed by slide
+            //TODO: This is flawed - a slide followed by a slide does not do what you expect
+            //Also 10 steps is nowhere near enough, need to use a fixed frequency step
+            //and vary the time_div accordingly to make it musically appealing.
             let freq_now = synthesiser.frequency()
             if (freq_now == 0) {
                 // nothing playing, so just play a normal note
