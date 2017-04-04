@@ -1,4 +1,7 @@
-// music.ts (c) 2017 David Whale
+// Sequencer.ts (c) 2017 David Whale
+
+//TODO I would like these to be an enumeration that is mapped to an internal frequency table
+//it makes it easier to do key changes and octave shifts etc
 
 enum NoteName { //TODO add all sharps and flats here
     C2 = 65,
@@ -66,23 +69,34 @@ enum NoteName { //TODO add all sharps and flats here
     B5 = 988,
 }
 
+enum PlayStyle {
+    Normal = 0,
+    Slur = 1,
+    Slide = 2,
+    Staccato = 3
+}
+//Tremolo? At same time as Slur/Slide
+
 //% weight=100 color=#0000ff icon="*"
-namespace DrWho {
-    let bpm = 137
-    let playing = 0
+namespace Sequencer {
+    let bpm = 137 //TODO make this dynamically changeable
+    let pitch_shift = 0 //TODO make this dynamcially changeable
+    let octave_shift = 0
+    let playing = 0 //TODO change to boolean
     
     export function fraction_to_ms(multiplier: number, divisor: number): number {
         // note this is sensitive to BPM changes, intentionally
         return ((60000 * 4 / bpm) * multiplier) / divisor
     }
-    
+
+    //TODO: merge these two into a single play function with parameters
     /**
      * Plays a note with a short delay after it
      * @param frequency frequency of note to play, eg:music.Note.C
      * @param multiplier multiplier for note fraction, eg:1 
      * @param divisor divisor for note fraction, eg:4
      */
-    //% blockId=drwho_play_note block="play %frequency|for %multiplier| / %divisor" blockGap=8
+    //% blockId=sequencer_play_note block="play %frequency|for %multiplier| / %divisor" blockGap=8
 
     export function play_note(frequency: NoteName, multiplier: number, divisor: number): void {
         let l = fraction_to_ms(multiplier, divisor)
@@ -106,7 +120,7 @@ namespace DrWho {
      * @param multiplier multiplier for note fraction, eg:1 
      * @param divisor divisor for note fraction, eg:4
      */
-    //% blockId=drwho_slur_note block="slur %frequency|for %multiplier|/ %divisor" blockGap=8
+    //% blockId=sequencer_slur_note block="slur %frequency|for %multiplier|/ %divisor" blockGap=8
 
     export function slur_note(frequency: NoteName, multiplier: number, divisor: number): void {
         let l = fraction_to_ms(multiplier, divisor)
