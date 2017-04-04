@@ -1,41 +1,28 @@
-// Sequencer.ts (c) 2017 David Whale
-//TODO: This is really Sequencer + Synthesiser
-//and a load of musical notes in a specific tuning
-
-//TODO: I would like to separate this entirely from Music and just use a pitch generator directly
-//so that we could do our own synthesis later
+// Music.ts (c) 2017 David Whale
 
 namespace synthesiser {
+    //TODO: This is currently not surfaced as real blocks (yet)
     let pitch_shift = 0
     let octave_shift = 0
     let current_frequency = 0
 
-    export function get_frequency(): number {
+    export function frequency(): number {
         return current_frequency
     }
 
-    //adaptor to allow later separation from Music module
-    //this will become part of a new Synthesiser
     function tone_for(frequency: number, duration: number) void {
-        //TODO: separate this from music and use native pitch generator directly
         current_frequency = frequency
-        music.playTone(frequency, duration)
-    }
-
-    //adaptor to allow later separation from Music module
-    //this will become part of a new Synthesiser
-    function tone(frequency: number) void {
-        //TODO: separate this from music and use native pitch generator directly
-        current_frequency = frequency
-        music.ringTone(frequency)
-    }
-
-    //adaptor to allow later separation from Music module
-    //this will become part of a new Synthesiser
-    function stop() void {
-        //TODO: separate this from music and use native pitch generator directly
+        pins.analogPitch(frequency, duration)
         current_frequency = 0
-        music.rest(0)
+    }
+
+    function tone(frequency: number) void {
+        current_frequency = frequency
+        pins.analogPitch(frequency, 0)
+    }
+
+    function stop() void {
+        tone(0, 0)
     }
 }
 
@@ -143,8 +130,8 @@ enum PlayStyle {
 //% weight=100 color=#0000ff icon="*"
 namespace Sequencer {
     // constants to allow different play styles to be customised
-    let stacatto_divisor = 2
-    let end_note_divisor = 10
+    let end_note_divisor = 10 // 10%
+    let stacatto_divisor = 2 // 50%
 
     let bpm = 137
 
@@ -154,18 +141,33 @@ namespace Sequencer {
     }
 
     /**
-     * Changes the beats per minute value
-     * @param b the beats per minute to use, eg:120
+     * Sets the tempo
+     * @param bpm The new tempo in beats per minute, eg: 120
      */
-
-    //% blockId=sequencer_bpm block="set BPM %bpm" blockGap=8
-
-    export function set_bpm(b: number) void {
-        bpm = b
+    //% blockId=sequencer_set_tempo block="set tempo to (bpm)|%value"
+    //% bpm.min=4 bpm.max=400
+    export function setBPM(b: number): void {
+        if (b > 0) {
+            bpm = Math.max(1, b);
+        }
     }
 
-    //TODO: get_bpm (look at how to implement getters)
-    //TODO: change_bpm_by??
+    /**
+     * Gets the tempo in beats per minute.
+     */
+    //% blockId=sequencer_tempo block="tempo (bpm)" blockGap=8
+    export function tempo(): number {
+        return bpm
+    }
+
+    /**
+     * Change the tempo
+     * @param bpm The change in beats per minute to the tempo, eg: 20
+     */
+    //% blockId=sequencer_change_tempo block="change tempo by (bpm)|%value" blockGap=8
+    export function changeBPM(diff: number): void {
+        bpm += diff
+    }
 
     /**
      * Plays a note
@@ -180,12 +182,12 @@ namespace Sequencer {
         frequency = note
         let l = fraction_to_ms(multiplier, divisor)
         // *technically* a beat is not always a quarter note
-        // but uses MIDI convention that beats per min = 1/4 notes per min
+        // but we use the MIDI convention, where beats-per-min = 1/4notes per-min
         let n1_4 = 60000/bpm
         if (style == Normal) {
             let d = n1_4 / end_note_divisor
             l -= d
-            if (synthesiser.get_frequency() == frequency) {
+            if (synthesiser.frequency() == frequency) {
                 // continue slur
                 basic.pause(l)
                 // rest turns off tone generation
@@ -194,14 +196,30 @@ namespace Sequencer {
             } else {
                 synthesiser.tone_for(frequency, l)
             }
-            current_frequency = 0
             basic.pause(d)
         } else if (style == Slur) {
             synthesiser.tone(frequency)
             basic.pause(l)
             // leave note playing at end, for the slur
         } else if (style == Slide) {
-            //TODO: frequency bend in l/n steps from old frequency to new frequency
+            //TODO: This is flawed at the moment
+            //if previous note was a Normal, freq will always be 0 when we get here
+            freq_now = synthesiser.frequency()
+            if (freq_now == 0) {
+                // nothing playing, so just play a normal note
+                synthesiser.tone_for(frequency, l)
+            }
+            else {
+                steps = 10
+                time_div = d/10
+                freq_div = (frequency - freq_now)/10
+                f = freq_now
+                for (let i=0; i<steps; i++) {
+                    synthesiser.tone_for(f, time_div)
+                    f += freq_div
+                }
+                //tone not left playing at end??
+            }
         } else if (style = Stacatto) {
             //NOTE: we don't support a slur into a staccato note
             d = l / staccato_divisor
