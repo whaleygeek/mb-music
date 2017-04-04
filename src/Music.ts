@@ -10,19 +10,22 @@ namespace synthesiser {
         return current_frequency
     }
 
-    function tone_for(frequency: number, duration: number) void {
+    export function tone_for(frequency: number, duration: number): void {
         current_frequency = frequency
         pins.analogPitch(frequency, duration)
         current_frequency = 0
     }
 
-    function tone(frequency: number) void {
-        current_frequency = frequency
-        pins.analogPitch(frequency, 0)
+    export function tone(frequency: number): void {
+        // prevent clicking if the note is the same frequency as previous note
+        if (frequency != current_frequency) {
+            current_frequency = frequency
+            pins.analogPitch(frequency, 0)
+        }
     }
 
-    function stop() void {
-        tone(0, 0)
+    export function stop(): void {
+        tone(0)
     }
 }
 
@@ -170,21 +173,58 @@ namespace Sequencer {
     }
 
     /**
-     * Plays a note
-     * @param note the note to play, eg:NoteName.C1
-     * @param multiplier multiplier for note fraction, eg:1 
-     * @param divisor divisor for note fraction, eg:4
+     * Play a normal note (with a small gap at the end)
+     * @param note the note to play eg:NoteName.C2
+     * @param multiplier the top part of the note length fraction eg:1
+     * @param divisor the bottom part of the note length fraction eg:4
      */
-    //% blockId=sequencer_play block="play %frequency|for %multiplier|/%divisor|using style %style" blockGap=8
+    //% blockId=sequencer_play block="play|%note|for %m/|%d" blockGap=8
+    export function play(note: NoteName, multiplier: number, divisor: number): void {
+        play_note(PlayStyle.Normal, note, multiplier, divisor)
+    }
 
-    export function play(note: NoteName, multiplier: number, divisor: number, style: PlayStyle): void {
+    /**
+     * Slur a note into the next note
+     * @param note the note to play eg:NoteName.C2
+     * @param multiplier the top part of the note length fraction eg:1
+     * @param divisor the bottom part of the note length fraction eg:4
+     */
+    //% blockId=sequencer_slur block="slur|%note|for %m/|%d" blockGap=8
+    export function slur(note: NoteName, multiplier: number, divisor: number): void {
+        play_note(PlayStyle.Slur, note, multiplier, divisor)
+    }
+
+    /**
+     * Slide a note up or down to the next note
+     * @param note the note to play eg:NoteName.C2
+     * @param multiplier the top part of the note length fraction eg:1
+     * @param divisor the bottom part of the note length fraction eg:4
+     */
+    //% blockId=sequencer_slide block="slide|%note|for %m/|%d" blockGap=8
+    export function slide(note: NoteName, multiplier: number, divisor: number): void {
+        play_note(PlayStyle.Slide, note, multiplier, divisor)
+    }
+
+    /**
+     * Play a staccato note
+     * @param note the note to play eg:NoteName.C2
+     * @param multiplier the top part of the note length fraction eg:1
+     * @param divisor the bottom part of the note length fraction eg:4
+     */
+    //% blockId=sequencer_staccato block="staccato|%note|for %m/|%d" blockGap=8
+    export function staccato(note: NoteName, multiplier: number, divisor: number): void {
+        play_note(PlayStyle.Staccato, note, multiplier, divisor)
+
+    }
+
+    export function play_note(style: PlayStyle, note: NoteName, multiplier: number, divisor: number): void {
         // at the moment they are one and the same, but later they will be separated
-        frequency = note
+        let frequency = note
         let l = fraction_to_ms(multiplier, divisor)
         // *technically* a beat is not always a quarter note
         // but we use the MIDI convention, where beats-per-min = 1/4notes per-min
-        let n1_4 = 60000/bpm
-        if (style == Normal) {
+        let n1_4 = 60000 / bpm
+        if (style == PlayStyle.Normal) {
             let d = n1_4 / end_note_divisor
             l -= d
             if (synthesiser.frequency() == frequency) {
@@ -197,34 +237,36 @@ namespace Sequencer {
                 synthesiser.tone_for(frequency, l)
             }
             basic.pause(d)
-        } else if (style == Slur) {
+        } else if (style == PlayStyle.Slur) {
             synthesiser.tone(frequency)
             basic.pause(l)
             // leave note playing at end, for the slur
-        } else if (style == Slide) {
+        } else if (style == PlayStyle.Slide) {
             //TODO: This is flawed at the moment
             //if previous note was a Normal, freq will always be 0 when we get here
-            freq_now = synthesiser.frequency()
+            let freq_now = synthesiser.frequency()
             if (freq_now == 0) {
                 // nothing playing, so just play a normal note
                 synthesiser.tone_for(frequency, l)
             }
             else {
-                steps = 10
-                time_div = d/10
-                freq_div = (frequency - freq_now)/10
-                f = freq_now
-                for (let i=0; i<steps; i++) {
+                let steps = 10
+                let time_div = l / 10
+                let freq_div = (frequency - freq_now) / 10
+                let f = freq_now
+                for (let i = 0; i < steps; i++) {
                     synthesiser.tone_for(f, time_div)
                     f += freq_div
                 }
                 //tone not left playing at end??
             }
-        } else if (style = Stacatto) {
-            //NOTE: we don't support a slur into a staccato note
-            d = l / staccato_divisor
+        } else if (style = PlayStyle.Staccato) {
+            //NOTE: we don't support a slur into a stacatto note
+            let d = l / stacatto_divisor
             l -= d
             synthesiser.tone_for(frequency, l)
+            basic.pause(d)
         }
     }
 }
+
