@@ -11,8 +11,12 @@ namespace synthesiser {
     }
 
     export function tone_for(frequency: number, duration: number): void {
+        // mixing AnalogPitch(freq, duration) and analogPitch(0, 1) is buggy
+        // so do all the timing ourselves to ensure correct behaviour
         current_frequency = frequency
-        pins.analogPitch(frequency, duration)
+        pins.analogPitch(frequency, 0) // forever
+        basic.pause(duration)
+        pins.analogPitch(0, 1) // stop sound
         current_frequency = 0
     }
 
@@ -20,12 +24,14 @@ namespace synthesiser {
         // prevent clicking if the note is the same frequency as previous note
         if (frequency != current_frequency) {
             current_frequency = frequency
-            pins.analogPitch(frequency, 0)
+            pins.analogPitch(frequency, 0) // forever
         }
     }
 
     export function stop(): void {
-        tone(0)
+        // must have a non zero delay parameter for the tone generator to actually stop
+        pins.analogPitch(0, 1)
+        current_frequency = 0
     }
 }
 
@@ -131,7 +137,7 @@ enum PlayStyle {
 
 
 //% weight=100 color=#0000ff icon="*"
-namespace Sequencer {
+namespace sequencer {
     // constants to allow different play styles to be customised
     let end_note_divisor = 10 // 10%
     let stacatto_divisor = 2 // 50%
@@ -232,7 +238,6 @@ namespace Sequencer {
                 basic.pause(l)
                 // rest turns off tone generation
                 synthesiser.stop()
-                basic.pause(d)
             } else {
                 synthesiser.tone_for(frequency, l)
             }
