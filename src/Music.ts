@@ -154,7 +154,7 @@ namespace sequencer {
      * @param bpm The new tempo in beats per minute, eg: 120
      */
     //% blockId=sequencer_set_tempo block="set tempo to (bpm)|%value"
-    //% bpm.min=4 bpm.max=400
+    //% b.min=4 bpm.m=400
     export function setBPM(b: number): void {
         if (b > 0) {
             bpm = Math.max(1, b);
